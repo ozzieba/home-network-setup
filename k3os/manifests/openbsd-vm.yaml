@@ -1,0 +1,120 @@
+apiVersion: kubevirt.io/v1alpha3
+kind: VirtualMachine
+metadata:
+  name: openbsd-router
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: openbsd-router
+    spec:
+      domain:
+        devices:
+          disks:
+            - name: containerdisk
+              containerDisk:
+                image: your-docker-repo/openbsd-image:latest
+          interfaces:
+            - name: default
+              pciePassthrough:
+                deviceSelector: "0000:01:00.0" # This will be updated dynamically
+        resources:
+          requests:
+            memory: "2Gi"
+      networks:
+        - name: default
+          pod: {}
+      cloudInitNoCloud:
+        userData: |
+          #cloud-config
+          hostname: openbsd-router
+          ssh_authorized_keys:
+            - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEkZOa1sRkc3/9/k3kgcN5LToGqlutZ5h/VyMxAfWG+O oz@oz-ThinkPad-P16v-Gen-1"
+          password: IPfDjVETF5bgo1e4
+          chpasswd: { expire: False }
+          runcmd:
+            - "echo 'net.inet.ip.forwarding=1' >> /etc/sysctl.conf"
+            - "sysctl net.inet.ip.forwarding=1"
+            - "pkg_add dhcpd"
+            - "rcctl enable dhcpd"
+            - "rcctl set dhcpd flags vlan20 vlan30 vlan50"
+            - "echo 'dhcpd_flags=\"vlan20 vlan30 vlan50\"' >> /etc/rc.conf.local"
+            - "echo 'pf=YES' >> /etc/rc.conf.local"
+            - "rcctl enable pf"
+            - "/etc/netstart"
+            - "pfctl -f /etc/pf.conf"
+            - "rcctl start dhcpd"
+          write_files:
+            - path: /etc/hostname.em0
+              content: |
+                up
+            - path: /etc/hostname.vlan10
+              content: |
+                dhcp
+                vlan 10 vnetid 10 parent em0
+            - path: /etc/hostname.vlan20
+              content: |
+                inet 192.168.20.1 255.255.255.0
+                vlan 20 vnetid 20 parent em0
+            - path: /etc/hostname.vlan30
+              content: |
+                inet 192.168.30.1 255.255.255.0
+                vlan 30 vnetid 30 parent em0
+            - path: /etc/hostname.vlan50
+              content: |
+                inet 192.168.1.1 255.255.255.0
+                vlan 50 vnetid 50 parent em0
+            - path: /etc/dhcpd.conf
+              content: |
+                option domain-name-servers 1.1.1.1, 8.8.8.8;
+                subnet 192.168.20.0 netmask 255.255.255.0 {
+                  range 192.168.20.100 192.168.20.200;
+                  option routers 192.168.20.1;
+                }
+                subnet 192.168.30.0 netmask 255.255.255.0 {
+                  range 192.168.30.100 192.168.30.200;
+                  option routers 192.168.30.1;
+                }
+                subnet 192.168.1.0 netmask 255.255.255.0 {
+                  range 192.168.1.100 192.168.1.200;
+                  option routers 192.168.1.1;
+                }
+            - path: /etc/pf.conf
+              content: |
+                # PF firewall rules
+
+                # Define network interfaces
+                ext_if = "vlan10"    # External interface connected to the modem
+                lan_if = "vlan20"    # Main Ethernet network interface
+                iot_if = "vlan30"    # IoT network interface
+                mgmt_if = "vlan50"   # Management network interface
+
+                set skip on lo       # Skip filtering on loopback interface
+
+                # NAT configuration
+                match out on  from {:network, :network} to any nat-to ()
+                # This line enables NAT for LAN and Management networks going out through the external interface.
+
+                # Default deny all incoming traffic
+                block in all
+
+                # Allow all outgoing traffic
+                pass out quick all keep state
+
+                # Allow established connections on the external interface
+                pass in quick on  proto { tcp udp icmp } from any to () keep state
+
+                # Allow traffic within the LAN network
+                pass in quick on  from :network to any keep state
+
+                # Block IoT devices from accessing other networks
+                block in quick on  from :network to any
+                # This line prevents IoT devices from accessing the internet or other networks.
+
+                # Allow Management network full access
+                pass in quick on  from :network to any keep state
+
+                # Allow SSH to OpenBSD from the Management network
+                pass in quick on  proto tcp from :network to () port ssh keep state
+

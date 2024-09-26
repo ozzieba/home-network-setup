@@ -1,0 +1,31 @@
+apiVersion: kubevirt.io/v1alpha3
+kind: VirtualMachine
+metadata:
+  name: homeassistant
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: homeassistant
+    spec:
+      domain:
+        devices:
+          disks:
+            - name: containerdisk
+              containerDisk:
+                image: ghcr.io/home-assistant/home-assistant:stable
+        resources:
+          requests:
+            memory: "1Gi"
+      networks:
+        - name: default
+          pod: {}
+      cloudInitNoCloud:
+        userData: |
+          #cloud-config
+          hostname: homeassistant
+          ssh_authorized_keys:
+            - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEkZOa1sRkc3/9/k3kgcN5LToGqlutZ5h/VyMxAfWG+O oz@oz-ThinkPad-P16v-Gen-1"
+          password: IPfDjVETF5bgo1e4
+          chpasswd: { expire: False }

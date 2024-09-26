@@ -1,0 +1,25 @@
+ssh_authorized_keys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEkZOa1sRkc3/9/k3kgcN5LToGqlutZ5h/VyMxAfWG+O oz@oz-ThinkPad-P16v-Gen-1"
+hostname: "sbc-hypervisor"
+k3os:
+  password: "IPfDjVETF5bgo1e4"
+  k3s_args:
+    - "--flannel-backend=none"
+    - "--disable=servicelb,traefik,local-storage"
+    - "--node-ip=192.168.68.200"
+write_files:
+- path: /var/lib/rancher/k3s/server/manifests/kubevirt-operator.yaml
+  content: |
+
+- path: /var/lib/rancher/k3s/server/manifests/kubevirt-cr.yaml
+  content: |
+
+- path: /var/lib/rancher/k3s/server/manifests/openbsd-vm.yaml
+  content: |
+
+- path: /var/lib/rancher/k3s/server/manifests/homeassistant-vm.yaml
+  content: |
+
+runcmd:
+  - "ip addr add 192.168.68.200/18 dev eth0"
+  - "ip link set eth0 up"
